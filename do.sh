@@ -55,6 +55,9 @@ test)
 	echo "=> ${cmd}"
 	${cmd} | head -n 5
 	;;
+diff)
+	git diff origin/oneshot+objdump
+	;;
 *)
 	echo "Unknown arg: ${arg}"
 	exit 1
