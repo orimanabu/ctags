@@ -67,8 +67,9 @@
 #include "writer_p.h"
 #include "xtag_p.h"
 
-#ifdef HAVE_JANSSON
 #include "interactive_p.h"
+
+#ifdef HAVE_JANSSON
 #include <jansson.h>
 #include <errno.h>
 #endif
