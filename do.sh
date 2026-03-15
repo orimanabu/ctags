@@ -40,6 +40,9 @@ step2|2|packcc)
 step3|3|node)
 	cd ${builddir} && emmake make 2>&1 | tee log.node
 	;;
+step4|4|wasm)
+	cd ${builddir} && make wasm 2>&1 | tee log.wasm
+	;;
 test)
 	cmd="file build-wasm/ctags.wasm"
 	echo "=> ${cmd}"
