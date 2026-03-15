@@ -1,0 +1,57 @@
+#!/bin/bash
+
+if [ x"$#" != x"1" ]; then
+	echo "$0 arg"
+	exit 1
+fi
+arg=$1; shift
+
+builddir=./build-wasm
+
+case ${arg} in
+step0|0|setup)
+ 	git clone git@github.com:orimanabu/ctags.git -b wasm ctags-wasm
+ 	cd ctags-wasm/
+ 	git clone https://github.com/emscripten-core/emsdk.git
+ 	cd emsdk/
+ 	./emsdk install latest
+ 	./emsdk activate latest
+ 	source emsdk_env.sh
+ 	which emcc emconfigure
+	;;
+step1|1)
+	./autogen.sh
+
+	mkdir ${builddir} && cd ${builddir}
+
+	emconfigure ../configure \
+	  --prefix=/Users/ori/ctags-wasm \
+	  --disable-seccomp \
+	  --disable-xml \
+	  --disable-json \
+	  --disable-yaml \
+	  --disable-pcre2 \
+	  --disable-iconv \
+	  LDFLAGS="-s NODERAWFS=1" 2>&1 | tee log.configure
+	;;
+step2|2)
+	cd ${builddir} && cc -fsigned-char -DPCC_USE_SYSTEM_STRNLEN -o packcc ../misc/packcc/src/packcc.c
+	;;
+step3|3)
+	cd ${builddir} && emmake make 2>&1 | tee log.make
+	;;
+test)
+	cmd="file build-wasm/ctags.wasm"
+	echo "=> ${cmd}"
+	${cmd}
+	echo
+
+	cmd="node build-wasm/ctags --sort=no -f - main/kind.c"
+	echo "=> ${cmd}"
+	${cmd} | head -n 5
+	;;
+*)
+	echo "Unknown arg: ${arg}"
+	exit 1
+	;;
+esac
