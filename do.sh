@@ -10,8 +10,8 @@ builddir=./build-wasm
 
 case ${arg} in
 step0|0|setup)
- 	git clone git@github.com:orimanabu/ctags.git -b wasm ctags-wasm
- 	cd ctags-wasm/
+ 	#git clone git@github.com:orimanabu/ctags.git -b wasm ctags-wasm
+ 	#cd ctags-wasm/
  	git clone https://github.com/emscripten-core/emsdk.git
  	cd emsdk/
  	./emsdk install latest
@@ -19,7 +19,7 @@ step0|0|setup)
  	source emsdk_env.sh
  	which emcc emconfigure
 	;;
-step1|1)
+step1|1|configure)
 	./autogen.sh
 
 	mkdir ${builddir} && cd ${builddir}
@@ -34,16 +34,21 @@ step1|1)
 	  --disable-iconv \
 	  LDFLAGS="-s NODERAWFS=1" 2>&1 | tee log.configure
 	;;
-step2|2)
+step2|2|packcc)
 	cd ${builddir} && cc -fsigned-char -DPCC_USE_SYSTEM_STRNLEN -o packcc ../misc/packcc/src/packcc.c
 	;;
-step3|3)
+step3|3|make)
 	cd ${builddir} && emmake make 2>&1 | tee log.make
 	;;
 test)
 	cmd="file build-wasm/ctags.wasm"
 	echo "=> ${cmd}"
 	${cmd}
+	echo
+
+	cmd="node --print-wasm-code build-wasm/ctags --sort=no -f - main/main.c"
+	echo "=> ${cmd}"
+	${cmd} | grep -B1 -A10 '^name: ctags'
 	echo
 
 	cmd="node build-wasm/ctags --sort=no -f - main/kind.c"
