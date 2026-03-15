@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -194,7 +194,7 @@
 
     details summary:hover { color: #333; }
 
-    /* presets */
+    /* preset buttons */
     .presets {
       display: flex;
       gap: 0.5rem;
@@ -228,38 +228,38 @@
 <div class="card">
   <div class="controls">
     <div class="filename-group">
-      <label for="filename">ファイル名（言語検出に使用）</label>
+      <label for="filename">Filename (used for language detection)</label>
       <input type="text" id="filename" value="test.c" placeholder="test.c / script.py / app.js ...">
     </div>
     <button id="submit" disabled>Submit</button>
   </div>
 
   <div class="presets">
-    <span>サンプル:</span>
+    <span>Samples:</span>
     <button class="preset" data-lang="c">C</button>
     <button class="preset" data-lang="python">Python</button>
     <button class="preset" data-lang="javascript">JavaScript</button>
     <button class="preset" data-lang="go">Go</button>
   </div>
 
-  <label for="code">コードスニペット</label>
+  <label for="code">Code snippet</label>
   <textarea id="code" spellcheck="false">int add(int a, int b) { return a + b; }
 static void helper(void) {}
 typedef struct { int x; int y; } Point;
 </textarea>
 
-  <div id="status" class="status loading">ctags WASM を読み込み中...</div>
+  <div id="status" class="status loading">Loading ctags WASM...</div>
 </div>
 
 <div class="card" id="output-section">
   <div class="output-header">
-    <h2>タグ情報</h2>
+    <h2>Tags</h2>
     <span class="tag-count" id="tag-count"></span>
   </div>
   <div id="table-container"></div>
 
   <details>
-    <summary>生の ctags 出力を見る</summary>
+    <summary>Show raw ctags output</summary>
     <div class="raw-output" id="raw-output"></div>
   </details>
 </div>
@@ -269,7 +269,7 @@ typedef struct { int x; int y; } Point;
 (async () => {
 
 /* ------------------------------------------------------------------ */
-/* サンプルコード                                                        */
+/* Sample code snippets                                                 */
 /* ------------------------------------------------------------------ */
 const SAMPLES = {
   c: {
@@ -369,7 +369,7 @@ func main() {
 };
 
 /* ------------------------------------------------------------------ */
-/* ctags WASM の初期化                                                  */
+/* Initialize ctags WASM module                                         */
 /* ------------------------------------------------------------------ */
 let capturedOutput = '';
 let Module;
@@ -381,19 +381,19 @@ try {
   });
   Module._ctags_init();
 
-  document.getElementById('status').textContent = '準備完了';
+  document.getElementById('status').textContent = 'Ready';
   document.getElementById('status').className = 'status ready';
   document.getElementById('submit').disabled = false;
 } catch (e) {
-  document.getElementById('status').textContent = 'エラー: ' + e.message;
+  document.getElementById('status').textContent = 'Error: ' + e.message;
   document.getElementById('status').className = 'status error';
 }
 
 /* ------------------------------------------------------------------ */
-/* ctags 出力を解析してテーブル表示                                      */
+/* Parse ctags output and render as a table                             */
 /* ------------------------------------------------------------------ */
 function parseTagLine(line) {
-  // ctags フォーマット: name\tfile\tpattern;"[\textensions...]
+  // ctags format: name\tfile\tpattern;"[\textensions...]
   if (!line || line.startsWith('!_TAG_')) return null;
   const parts = line.split('\t');
   if (parts.length < 3) return null;
@@ -417,26 +417,26 @@ function renderTable(rawText) {
   const tags   = lines.map(parseTagLine).filter(Boolean);
 
   document.getElementById('tag-count').textContent =
-    tags.length === 0 ? '' : `${tags.length} 件`;
-  document.getElementById('raw-output').textContent = rawText || '(出力なし)';
+    tags.length === 0 ? '' : `${tags.length} tag${tags.length === 1 ? '' : 's'}`;
+  document.getElementById('raw-output').textContent = rawText || '(no output)';
 
   const container = document.getElementById('table-container');
 
   if (tags.length === 0) {
-    container.innerHTML = '<div class="empty-msg">タグが見つかりませんでした</div>';
+    container.innerHTML = '<div class="empty-msg">No tags found</div>';
     return;
   }
 
-  // 使用中のフィールドを収集
-  const hasScope    = tags.some(t => t.class || t.struct || t.namespace || t.function);
-  const hasTyperef  = tags.some(t => t.typeref);
+  // Determine which optional columns are present
+  const hasScope   = tags.some(t => t.class || t.struct || t.namespace || t.function);
+  const hasTyperef = tags.some(t => t.typeref);
 
   let html = '<table><thead><tr>'
-    + '<th>名前</th>'
-    + '<th>種別</th>'
-    + (hasScope   ? '<th>スコープ</th>' : '')
-    + (hasTyperef ? '<th>型</th>'       : '')
-    + '<th>パターン</th>'
+    + '<th>Name</th>'
+    + '<th>Kind</th>'
+    + (hasScope   ? '<th>Scope</th>' : '')
+    + (hasTyperef ? '<th>Type</th>'  : '')
+    + '<th>Pattern</th>'
     + '</tr></thead><tbody>';
 
   for (const t of tags) {
@@ -469,7 +469,7 @@ function esc(s) {
 }
 
 /* ------------------------------------------------------------------ */
-/* イベントハンドラ                                                      */
+/* Event handlers                                                       */
 /* ------------------------------------------------------------------ */
 document.getElementById('submit').addEventListener('click', () => {
   const filename = document.getElementById('filename').value.trim() || 'input.c';
@@ -488,14 +488,14 @@ document.getElementById('submit').addEventListener('click', () => {
   document.getElementById('output-section').scrollIntoView({ behavior: 'smooth' });
 });
 
-// Ctrl+Enter でも Submit
+// Ctrl+Enter also triggers Submit
 document.getElementById('code').addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     document.getElementById('submit').click();
   }
 });
 
-// サンプルボタン
+// Sample preset buttons
 document.querySelectorAll('button.preset').forEach(btn => {
   btn.addEventListener('click', () => {
     const s = SAMPLES[btn.dataset.lang];
