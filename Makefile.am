@@ -60,6 +60,36 @@ clean-local:
 maintainer-clean-local:
 	rm -rf .deps misc/packcc/.dirstamp
 
+# WASM module target.
+# Run inside a build directory configured with emconfigure:
+#
+#   mkdir build-wasm && cd build-wasm
+#   emconfigure ../configure --prefix=... --disable-seccomp --disable-xml \
+#       --disable-json --disable-yaml --disable-pcre2 --disable-iconv
+#   cc -fsigned-char -DPCC_USE_SYSTEM_STRNLEN -o packcc ../misc/packcc/src/packcc.c
+#   emmake make wasm
+#
+WASM_MODULE   = ctags-wasm.js
+WASM_CPPFLAGS = $(libctags_a_CPPFLAGS)
+WASM_LDFLAGS  = \
+	-s WASM=1 \
+	-s MODULARIZE=1 \
+	-s EXPORT_NAME=CTagsModule \
+	-s EXPORTED_FUNCTIONS='["_ctags_init","_ctags_parse_buffer","_ctags_set_output_format","_malloc","_free"]' \
+	-s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","allocateUTF8","UTF8ToString"]' \
+	-s ALLOW_MEMORY_GROWTH=1
+
+$(WASM_MODULE): libctags.a $(GNULIB_LIBS) $(srcdir)/main/wasm_entry.c
+	$(CC) $(CFLAGS) $(WASM_CPPFLAGS) \
+		$(srcdir)/main/wasm_entry.c \
+		libctags.a $(GNULIB_LIBS) \
+		$(WASM_LDFLAGS) -o $@
+
+.PHONY: wasm
+wasm: $(WASM_MODULE)
+	cp $(srcdir)/misc/wasm-demo.js .
+	cp $(srcdir)/misc/wasm-demo.html .
+
 bin_PROGRAMS = ctags
 noinst_LIBRARIES =
 noinst_LIBRARIES += libctags.a

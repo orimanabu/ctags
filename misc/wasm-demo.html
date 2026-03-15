@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ctags WASM Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 1.4rem;
+      margin-bottom: 1.5rem;
+      color: #222;
+    }
+
+    .card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 0.4rem;
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-end;
+      margin-bottom: 0.75rem;
+    }
+
+    .filename-group {
+      flex: 1;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      padding: 0.45rem 0.65rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 0.9rem;
+      font-family: monospace;
+    }
+
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #4a90e2;
+      box-shadow: 0 0 0 2px rgba(74,144,226,0.2);
+    }
+
+    textarea {
+      width: 100%;
+      height: 220px;
+      padding: 0.75rem;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      font-size: 0.9rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      resize: vertical;
+      line-height: 1.5;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #4a90e2;
+      box-shadow: 0 0 0 2px rgba(74,144,226,0.2);
+    }
+
+    button#submit {
+      padding: 0.45rem 1.4rem;
+      background: #4a90e2;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+      height: 2.1rem;
+    }
+
+    button#submit:hover { background: #357abd; }
+    button#submit:disabled { background: #aac4e8; cursor: not-allowed; }
+
+    .status {
+      font-size: 0.8rem;
+      color: #888;
+      margin-top: 0.5rem;
+      min-height: 1.2em;
+    }
+
+    .status.loading { color: #e08a00; }
+    .status.ready   { color: #2e9c4e; }
+    .status.error   { color: #c0392b; }
+
+    #output-section { display: none; }
+
+    .output-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+
+    .output-header h2 {
+      font-size: 1rem;
+      color: #444;
+    }
+
+    .tag-count {
+      font-size: 0.8rem;
+      color: #888;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.82rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 0.4rem 0.6rem;
+      background: #f0f4f8;
+      border-bottom: 2px solid #dce4ec;
+      color: #555;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    tbody tr:nth-child(even) { background: #fafafa; }
+    tbody tr:hover { background: #eef4fc; }
+
+    td {
+      padding: 0.35rem 0.6rem;
+      border-bottom: 1px solid #eee;
+      vertical-align: middle;
+    }
+
+    .tag-name  { font-weight: 600; color: #1a73e8; }
+    .tag-kind  { color: #8e44ad; }
+    .tag-scope { color: #2e7d32; font-style: italic; }
+    .tag-pattern {
+      color: #666;
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .empty-msg {
+      color: #999;
+      font-size: 0.9rem;
+      text-align: center;
+      padding: 1.5rem;
+    }
+
+    .raw-output {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 5px;
+      padding: 0.75rem 1rem;
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      white-space: pre;
+      overflow-x: auto;
+      margin-top: 1rem;
+    }
+
+    details summary {
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: #666;
+      margin-top: 0.75rem;
+      user-select: none;
+    }
+
+    details summary:hover { color: #333; }
+
+    /* presets */
+    .presets {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.5rem;
+    }
+
+    .presets span {
+      font-size: 0.78rem;
+      color: #888;
+      align-self: center;
+    }
+
+    button.preset {
+      padding: 0.2rem 0.6rem;
+      font-size: 0.78rem;
+      background: #f0f4f8;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      color: #555;
+    }
+
+    button.preset:hover { background: #dce4ec; }
+  </style>
+</head>
+<body>
+
+<h1>ctags WASM Demo</h1>
+
+<div class="card">
+  <div class="controls">
+    <div class="filename-group">
+      <label for="filename">ファイル名（言語検出に使用）</label>
+      <input type="text" id="filename" value="test.c" placeholder="test.c / script.py / app.js ...">
+    </div>
+    <button id="submit" disabled>Submit</button>
+  </div>
+
+  <div class="presets">
+    <span>サンプル:</span>
+    <button class="preset" data-lang="c">C</button>
+    <button class="preset" data-lang="python">Python</button>
+    <button class="preset" data-lang="javascript">JavaScript</button>
+    <button class="preset" data-lang="go">Go</button>
+  </div>
+
+  <label for="code">コードスニペット</label>
+  <textarea id="code" spellcheck="false">int add(int a, int b) { return a + b; }
+static void helper(void) {}
+typedef struct { int x; int y; } Point;
+</textarea>
+
+  <div id="status" class="status loading">ctags WASM を読み込み中...</div>
+</div>
+
+<div class="card" id="output-section">
+  <div class="output-header">
+    <h2>タグ情報</h2>
+    <span class="tag-count" id="tag-count"></span>
+  </div>
+  <div id="table-container"></div>
+
+  <details>
+    <summary>生の ctags 出力を見る</summary>
+    <div class="raw-output" id="raw-output"></div>
+  </details>
+</div>
+
+<script src="./ctags-wasm.js"></script>
+<script>
+(async () => {
+
+/* ------------------------------------------------------------------ */
+/* サンプルコード                                                        */
+/* ------------------------------------------------------------------ */
+const SAMPLES = {
+  c: {
+    filename: 'test.c',
+    code: `#include <stdio.h>
+
+typedef struct {
+    int x;
+    int y;
+} Point;
+
+int add(int a, int b) { return a + b; }
+
+static void print_point(const Point *p) {
+    printf("(%d, %d)\\n", p->x, p->y);
+}
+
+int main(void) {
+    Point pt = {1, 2};
+    print_point(&pt);
+    return 0;
+}
+`
+  },
+  python: {
+    filename: 'script.py',
+    code: `class Animal:
+    def __init__(self, name):
+        self.name = name
+
+    def speak(self):
+        raise NotImplementedError
+
+class Dog(Animal):
+    def speak(self):
+        return f"{self.name} says woof!"
+
+def greet(name: str) -> str:
+    return f"Hello, {name}"
+
+MAX_ANIMALS = 100
+`
+  },
+  javascript: {
+    filename: 'app.js',
+    code: `const PI = 3.14159;
+
+class Shape {
+  constructor(color) {
+    this.color = color;
+  }
+  area() { return 0; }
+}
+
+class Circle extends Shape {
+  constructor(color, radius) {
+    super(color);
+    this.radius = radius;
+  }
+  area() { return PI * this.radius ** 2; }
+}
+
+function createShape(type, ...args) {
+  if (type === 'circle') return new Circle(...args);
+  throw new Error('unknown shape');
+}
+`
+  },
+  go: {
+    filename: 'main.go',
+    code: `package main
+
+import "fmt"
+
+type Animal interface {
+    Speak() string
+}
+
+type Dog struct {
+    Name string
+}
+
+func (d Dog) Speak() string {
+    return d.Name + " says woof!"
+}
+
+func greet(name string) string {
+    return fmt.Sprintf("Hello, %s", name)
+}
+
+func main() {
+    d := Dog{Name: "Rex"}
+    fmt.Println(d.Speak())
+}
+`
+  }
+};
+
+/* ------------------------------------------------------------------ */
+/* ctags WASM の初期化                                                  */
+/* ------------------------------------------------------------------ */
+let capturedOutput = '';
+let Module;
+
+try {
+  Module = await CTagsModule({
+    print:    (line) => { capturedOutput += line + '\n'; },
+    printErr: () => {},
+  });
+  Module._ctags_init();
+
+  document.getElementById('status').textContent = '準備完了';
+  document.getElementById('status').className = 'status ready';
+  document.getElementById('submit').disabled = false;
+} catch (e) {
+  document.getElementById('status').textContent = 'エラー: ' + e.message;
+  document.getElementById('status').className = 'status error';
+}
+
+/* ------------------------------------------------------------------ */
+/* ctags 出力を解析してテーブル表示                                      */
+/* ------------------------------------------------------------------ */
+function parseTagLine(line) {
+  // ctags フォーマット: name\tfile\tpattern;"[\textensions...]
+  if (!line || line.startsWith('!_TAG_')) return null;
+  const parts = line.split('\t');
+  if (parts.length < 3) return null;
+
+  const name    = parts[0];
+  const file    = parts[1];
+  const pattern = parts[2].replace(/^\/\^?/, '').replace(/\$?\/";\s*$/, '').replace(/\\\//, '/');
+
+  const extras = {};
+  for (let i = 3; i < parts.length; i++) {
+    const kv = parts[i].split(':');
+    if (kv.length === 1)      extras.kind  = kv[0];
+    else if (kv.length >= 2)  extras[kv[0]] = kv.slice(1).join(':');
+  }
+
+  return { name, file, pattern, ...extras };
+}
+
+function renderTable(rawText) {
+  const lines  = rawText.trim().split('\n').filter(Boolean);
+  const tags   = lines.map(parseTagLine).filter(Boolean);
+
+  document.getElementById('tag-count').textContent =
+    tags.length === 0 ? '' : `${tags.length} 件`;
+  document.getElementById('raw-output').textContent = rawText || '(出力なし)';
+
+  const container = document.getElementById('table-container');
+
+  if (tags.length === 0) {
+    container.innerHTML = '<div class="empty-msg">タグが見つかりませんでした</div>';
+    return;
+  }
+
+  // 使用中のフィールドを収集
+  const hasScope    = tags.some(t => t.class || t.struct || t.namespace || t.function);
+  const hasTyperef  = tags.some(t => t.typeref);
+
+  let html = '<table><thead><tr>'
+    + '<th>名前</th>'
+    + '<th>種別</th>'
+    + (hasScope   ? '<th>スコープ</th>' : '')
+    + (hasTyperef ? '<th>型</th>'       : '')
+    + '<th>パターン</th>'
+    + '</tr></thead><tbody>';
+
+  for (const t of tags) {
+    const scope = t.class || t.struct || t.namespace || t.function || '';
+    html += '<tr>'
+      + `<td class="tag-name">${esc(t.name)}</td>`
+      + `<td class="tag-kind">${esc(kindLabel(t.kind))}</td>`
+      + (hasScope   ? `<td class="tag-scope">${esc(scope)}</td>` : '')
+      + (hasTyperef ? `<td>${esc(t.typeref || '')}</td>` : '')
+      + `<td class="tag-pattern" title="${esc(t.pattern)}">${esc(t.pattern)}</td>`
+      + '</tr>';
+  }
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function kindLabel(k) {
+  const MAP = {
+    f:'function', c:'class', m:'member/method', v:'variable',
+    t:'typedef', s:'struct', e:'enum', d:'macro',
+    p:'prototype', n:'namespace', i:'interface', g:'enum name',
+    F:'field', l:'local'
+  };
+  return k ? `${k} (${MAP[k] || k})` : '';
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ------------------------------------------------------------------ */
+/* イベントハンドラ                                                      */
+/* ------------------------------------------------------------------ */
+document.getElementById('submit').addEventListener('click', () => {
+  const filename = document.getElementById('filename').value.trim() || 'input.c';
+  const code     = document.getElementById('code').value;
+
+  capturedOutput = '';
+
+  const encoded = new TextEncoder().encode(code);
+  Module.ccall('ctags_parse_buffer', null,
+    ['string', 'array', 'number'],
+    [filename, encoded, encoded.length]
+  );
+
+  renderTable(capturedOutput);
+  document.getElementById('output-section').style.display = 'block';
+  document.getElementById('output-section').scrollIntoView({ behavior: 'smooth' });
+});
+
+// Ctrl+Enter でも Submit
+document.getElementById('code').addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    document.getElementById('submit').click();
+  }
+});
+
+// サンプルボタン
+document.querySelectorAll('button.preset').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const s = SAMPLES[btn.dataset.lang];
+    if (!s) return;
+    document.getElementById('filename').value = s.filename;
+    document.getElementById('code').value     = s.code;
+  });
+});
+})();
+</script>
+</body>
+</html>
