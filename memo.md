@@ -1079,6 +1079,233 @@ ori@apricot ctags % claude
 
 ⏺ 止めました。
 
+❯ misc/wasm-demo.html 内の日本語を全て英語にして (コメント含む)
+
+⏺ Read 2 files (ctrl+o to expand)
+
+⏺ Write(~/devel/src/github.com/orimanabu/ctags/misc/wasm-demo.html)
+  ⎿  Added 28 lines, removed 28 lines
+      1  <!DOCTYPE html>
+      2 -<html lang="ja">
+      2 +<html lang="en">
+      3  <head>
+      4    <meta charset="UTF-8">
+      5    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     ...
+      194
+      195      details summary:hover { color: #333; }
+      196
+      197 -    /* presets */
+      197 +    /* preset buttons */
+      198      .presets {
+      199        display: flex;
+      200        gap: 0.5rem;
+     ...
+      228  <div class="card">
+      229    <div class="controls">
+      230      <div class="filename-group">
+      231 -      <label for="filename">ファイル名（言語検出に使用）</label>
+      231 +      <label for="filename">Filename (used for language detection)</label>
+      232        <input type="text" id="filename" value="test.c" placeholder="test.c / script.py / app.js ...">
+      233      </div>
+      234      <button id="submit" disabled>Submit</button>
+      235    </div>
+      236
+      237    <div class="presets">
+      238 -    <span>サンプル:</span>
+      238 +    <span>Samples:</span>
+      239      <button class="preset" data-lang="c">C</button>
+      240      <button class="preset" data-lang="python">Python</button>
+      241      <button class="preset" data-lang="javascript">JavaScript</button>
+      242      <button class="preset" data-lang="go">Go</button>
+      243    </div>
+      244
+      245 -  <label for="code">コードスニペット</label>
+      245 +  <label for="code">Code snippet</label>
+      246    <textarea id="code" spellcheck="false">int add(int a, int b) { return a + b; }
+      247  static void helper(void) {}
+      248  typedef struct { int x; int y; } Point;
+      249  </textarea>
+      250
+      251 -  <div id="status" class="status loading">ctags WASM を読み込み中...</div>
+      251 +  <div id="status" class="status loading">Loading ctags WASM...</div>
+      252  </div>
+      253
+      254  <div class="card" id="output-section">
+      255    <div class="output-header">
+      256 -    <h2>タグ情報</h2>
+      256 +    <h2>Tags</h2>
+      257      <span class="tag-count" id="tag-count"></span>
+      258    </div>
+      259    <div id="table-container"></div>
+      260
+      261    <details>
+      262 -    <summary>生の ctags 出力を見る</summary>
+      262 +    <summary>Show raw ctags output</summary>
+      263      <div class="raw-output" id="raw-output"></div>
+      264    </details>
+      265  </div>
+     ...
+      269  (async () => {
+      270
+      271  /* ------------------------------------------------------------------ */
+      272 -/* サンプルコード                                                        */
+      272 +/* Sample code snippets                                                 */
+      273  /* ------------------------------------------------------------------ */
+      274  const SAMPLES = {
+      275    c: {
+     ...
+      369  };
+      370
+      371  /* ------------------------------------------------------------------ */
+      372 -/* ctags WASM の初期化                                                  */
+      372 +/* Initialize ctags WASM module                                         */
+      373  /* ------------------------------------------------------------------ */
+      374  let capturedOutput = '';
+      375  let Module;
+     ...
+      381    });
+      382    Module._ctags_init();
+      383
+      384 -  document.getElementById('status').textContent = '準備完了';
+      384 +  document.getElementById('status').textContent = 'Ready';
+      385    document.getElementById('status').className = 'status ready';
+      386    document.getElementById('submit').disabled = false;
+      387  } catch (e) {
+      388 -  document.getElementById('status').textContent = 'エラー: ' + e.message;
+      388 +  document.getElementById('status').textContent = 'Error: ' + e.message;
+      389    document.getElementById('status').className = 'status error';
+      390  }
+      391
+      392  /* ------------------------------------------------------------------ */
+      393 -/* ctags 出力を解析してテーブル表示                                      */
+      393 +/* Parse ctags output and render as a table                             */
+      394  /* ------------------------------------------------------------------ */
+      395  function parseTagLine(line) {
+      396 -  // ctags フォーマット: name\tfile\tpattern;"[\textensions...]
+      396 +  // ctags format: name\tfile\tpattern;"[\textensions...]
+      397    if (!line || line.startsWith('!_TAG_')) return null;
+      398    const parts = line.split('\t');
+      399    if (parts.length < 3) return null;
+     ...
+      417    const tags   = lines.map(parseTagLine).filter(Boolean);
+      418
+      419    document.getElementById('tag-count').textContent =
+      420 -    tags.length === 0 ? '' : `${tags.length} 件`;
+      421 -  document.getElementById('raw-output').textContent = rawText || '(出力なし)';
+      420 +    tags.length === 0 ? '' : `${tags.length} tag${tags.length === 1 ? '' : 's'}`;
+      421 +  document.getElementById('raw-output').textContent = rawText || '(no output)';
+      422
+      423    const container = document.getElementById('table-container');
+      424
+      425    if (tags.length === 0) {
+      426 -    container.innerHTML = '<div class="empty-msg">タグが見つかりませんでした</div>';
+      426 +    container.innerHTML = '<div class="empty-msg">No tags found</div>';
+      427      return;
+      428    }
+      429
+      430 -  // 使用中のフィールドを収集
+      431 -  const hasScope    = tags.some(t => t.class || t.struct || t.namespace || t.function);
+      432 -  const hasTyperef  = tags.some(t => t.typeref);
+      430 +  // Determine which optional columns are present
+      431 +  const hasScope   = tags.some(t => t.class || t.struct || t.namespace || t.function);
+      432 +  const hasTyperef = tags.some(t => t.typeref);
+      433
+      434    let html = '<table><thead><tr>'
+      435 -    + '<th>名前</th>'
+      436 -    + '<th>種別</th>'
+      437 -    + (hasScope   ? '<th>スコープ</th>' : '')
+      438 -    + (hasTyperef ? '<th>型</th>'       : '')
+      439 -    + '<th>パターン</th>'
+      435 +    + '<th>Name</th>'
+      436 +    + '<th>Kind</th>'
+      437 +    + (hasScope   ? '<th>Scope</th>' : '')
+      438 +    + (hasTyperef ? '<th>Type</th>'  : '')
+      439 +    + '<th>Pattern</th>'
+      440      + '</tr></thead><tbody>';
+      441
+      442    for (const t of tags) {
+     ...
+      469  }
+      470
+      471  /* ------------------------------------------------------------------ */
+      472 -/* イベントハンドラ                                                      */
+      472 +/* Event handlers                                                       */
+      473  /* ------------------------------------------------------------------ */
+      474  document.getElementById('submit').addEventListener('click', () => {
+      475    const filename = document.getElementById('filename').value.trim() || 'input.c';
+     ...
+      488    document.getElementById('output-section').scrollIntoView({ behavior: 'smooth' });
+      489  });
+      490
+      491 -// Ctrl+Enter でも Submit
+      491 +// Ctrl+Enter also triggers Submit
+      492  document.getElementById('code').addEventListener('keydown', (e) => {
+      493    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      494      document.getElementById('submit').click();
+      495    }
+      496  });
+      497
+      498 -// サンプルボタン
+      498 +// Sample preset buttons
+      499  document.querySelectorAll('button.preset').forEach(btn => {
+      500    btn.addEventListener('click', () => {
+      501      const s = SAMPLES[btn.dataset.lang];
+
+⏺ 日本語が残っていないか確認します。
+
+⏺ Searched for 2 patterns (ctrl+o to expand)
+
+⏺ 日本語は全て英語に置き換わっています。変更点の一覧:
+
+  ┌───────────────┬──────────────────────────────────┬──────────────────────────────────────────────┐
+  │   変更箇所    │              変更前              │                    変更後                    │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ <html lang>   │ ja                               │ en                                           │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ label         │ ファイル名（言語検出に使用）     │ Filename (used for language detection)       │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ presets label │ サンプル:                        │ Samples:                                     │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ label         │ コードスニペット                 │ Code snippet                                 │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ status        │ ctags WASM を読み込み中...       │ Loading ctags WASM...                        │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ section title │ タグ情報                         │ Tags                                         │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ tag count     │ N 件                             │ N tag(s)                                     │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ details       │ 生の ctags 出力を見る            │ Show raw ctags output                        │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ JS comment    │ サンプルコード                   │ Sample code snippets                         │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ JS comment    │ ctags WASM の初期化              │ Initialize ctags WASM module                 │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ JS comment    │ ctags フォーマット: ...          │ ctags format: ...                            │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ JS comment    │ ctags 出力を解析してテーブル表示 │ Parse ctags output and render as a table     │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ JS comment    │ 使用中のフィールドを収集         │ Determine which optional columns are present │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ table headers │ 名前/種別/スコープ/型/パターン   │ Name/Kind/Scope/Type/Pattern                 │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ empty message │ タグが見つかりませんでした       │ No tags found                                │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ raw output    │ (出力なし)                       │ (no output)                                  │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ JS comment    │ イベントハンドラ                 │ Event handlers                               │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ JS comment    │ Ctrl+Enter でも Submit           │ Ctrl+Enter also triggers Submit              │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ JS comment    │ サンプルボタン                   │ Sample preset buttons                        │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ status        │ 準備完了                         │ Ready                                        │
+  ├───────────────┼──────────────────────────────────┼──────────────────────────────────────────────┤
+  │ status        │ エラー:                          │ Error:                                       │
+  └───────────────┴──────────────────────────────────┴──────────────────────────────────────────────┘
+
+✻ Cogitated for 1m 11s
+
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 ❯
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
