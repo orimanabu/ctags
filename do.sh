@@ -55,6 +55,9 @@ test)
 	echo "=> ${cmd}"
 	${cmd} | head -n 5
 	;;
+demo)
+	cd ${builddir} && node wasm-demo.js
+	;;
 diff)
 	git diff origin/oneshot+objdump
 	;;

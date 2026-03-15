@@ -465,3 +465,622 @@ ori@apricot ctags % claude
   ? for shortcuts
 ```
 
+# Phase 2
+
+```
+❯ ありがとうございます。次は「方針2: カスタムWASMエントリポイント（推奨） - ブラウザ/JSからAPIとして使える形にする方法」に進みたいです
+
+⏺ まず関連するコードを調査してから設計します。
+
+⏺ Explore(Explore ctags output/writer internals)
+  ⎿  Done (56 tool uses · 62.4k tokens · 3m 42s)
+  (ctrl+o to expand)
+
+⏺ エントリポイント設計に必要なキー実装を直接確認します。
+
+⏺ Searched for 7 patterns, read 3 files (ctrl+o to expand)
+
+⏺ 仕組みが全て把握できました。設計方針を整理します。
+
+  出力の流れ (INTERACTIVE_WITH_SANDBOX モード):
+  1. openTagFile() → tempファイルなしの in-memory MIO を生成
+  2. parseFileWithMio() → tags をメモリMIOに書き込み
+  3. closeTagFile() → catFile() → putchar() → stdout
+
+  stdout は Emscripten が Module.print コールバックにルーティングするので、JSから捕捉できます。
+
+  実装に進みます。
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Write(main/wasm_entry.c)
+  ⎿  Wrote 125 lines to main/wasm_entry.c
+       1 /*
+       2 *   Copyright (c) 2025
+       3 *
+       4 *   This source code is released for free distribution under the terms of the
+       5 *   GNU General Public License version 2 or (at your option) any later version.
+       6 *
+       7 *   WASM entry point for ctags.
+       8 *   Provides JavaScript-callable functions for parsing source code from memory.
+       9 *
+      10 *   Usage from JavaScript:
+     … +115 lines (ctrl+o to expand)
+
+⏺ 次に Makefile.am に wasm ターゲットを追加します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(Makefile.am)
+  ⎿  Added 28 lines
+      60  maintainer-clean-local:
+      61    rm -rf .deps misc/packcc/.dirstamp
+      62
+      63 +# WASM module target.
+      64 +# Run inside a build directory configured with emconfigure:
+      65 +#
+      66 +#   mkdir build-wasm && cd build-wasm
+      67 +#   emconfigure ../configure --prefix=... --disable-seccomp --disable-xml \
+      68 +#       --disable-json --disable-yaml --disable-pcre2 --disable-iconv
+      69 +#   cc -fsigned-char -DPCC_USE_SYSTEM_STRNLEN -o packcc ../misc/packcc/src/packcc.c
+      70 +#   emmake make wasm
+      71 +#
+      72 +WASM_MODULE   = ctags-wasm.js
+      73 +WASM_CPPFLAGS = $(libctags_a_CPPFLAGS)
+      74 +WASM_LDFLAGS  = \
+      75 +  -s WASM=1 \
+      76 +  -s MODULARIZE=1 \
+      77 +  -s EXPORT_NAME=CTagsModule \
+      78 +  -s EXPORTED_FUNCTIONS='["_ctags_init","_ctags_parse_buffer","_ctags_set_output_format","_malloc","_free"]' \
+      79 +  -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","allocateUTF8","UTF8ToString"]' \
+      80 +  -s ALLOW_MEMORY_GROWTH=1
+      81 +
+      82 +$(WASM_MODULE): libctags.a $(GNULIB_LIBS) $(srcdir)/main/wasm_entry.c
+      83 +  $(CC) $(CFLAGS) $(WASM_CPPFLAGS) \
+      84 +    $(srcdir)/main/wasm_entry.c \
+      85 +    libctags.a $(GNULIB_LIBS) \
+      86 +    $(WASM_LDFLAGS) -o $@
+      87 +
+      88 +.PHONY: wasm
+      89 +wasm: $(WASM_MODULE)
+      90 +
+      91  bin_PROGRAMS = ctags
+      92  noinst_LIBRARIES =
+      93  noinst_LIBRARIES += libctags.a
+
+⏺ ビルドして確認します。
+
+⏺ Bash(cd /Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm && emmake make wasm 2>&1)
+  ⎿  Error: Exit code 2
+     emmake: "make wasm" in "/Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm"
+      cd .. && /bin/sh /Users/ori/devel/src/github.com/orimanabu/ctags/missing automake-1.18 --foreign Makefile
+     /opt/homebrew/Cellar/automake/1.18.1/share/automake-1.18/am/tags.am: warning: redefinition of 'ctags' ...
+     /opt/homebrew/Cellar/automake/1.18.1/share/automake-1.18/am/program.am: ... 'ctags$(EXEEXT)' previously defined here
+     Makefile.am:91:   while processing program 'ctags'
+     Makefile.am:74: warning: variable 'WASM_LDFLAGS' is defined but no program or
+     Makefile.am:74: library has 'WASM' as canonical name (possible typo)
+      cd . && /bin/sh ./config.status Makefile depfiles
+     config.status: creating Makefile
+     … +214 lines (ctrl+o to see all)
+
+⏺ automake が走り直しました。末尾のエラーを確認します。
+
+⏺ Bash(cd /Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm && emmake make wasm 2>&1 | grep -E "error:|Error|ctags-wasm" | head -20)
+  ⎿             -s WASM=1 -s MODULARIZE=1 -s EXPORT_NAME=CTagsModule -s
+     EXPORTED_FUNCTIONS='["_ctags_init","_ctags_parse_buffer","_ctags_set_output_format","_malloc","_free"]' -s EXPOR
+     TED_RUNTIME_METHODS='["ccall","cwrap","allocateUTF8","UTF8ToString"]' -s ALLOW_MEMORY_GROWTH=1 -o ctags-wasm.js
+     ../main/wasm_entry.c:79:21: error: cannot assign to variable 'Option' with const-qualified type 'const optionValues' (aka 'const struct sOptionValues')
+     … +6 lines (ctrl+o to expand)
+
+⏺ Option が const になっている理由を確認します。
+
+⏺ Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ OPTION_WRITE を定義したファイル内でのみ Option に書き込めます。options.c に setter を追加するか、OPTION_WRITE を使います。既存のアプローチを確認します。
+
+⏺ Searched for 2 patterns (ctrl+o to expand)
+
+⏺ options.c だけが OPTION_WRITE を define して Option に書き込める設計です。wasm_entry.c でも同じパターンを使います。
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 1 line
+      40  #include "field_p.h"
+      41  #include "main_p.h"
+      42  #include "mio.h"
+      43 +#define OPTION_WRITE   /* allow writing to Option (same pattern as options.c) */
+      44  #include "options_p.h"
+      45  #include "parse_p.h"
+      46  #include "routines_p.h"
+
+⏺ Bash(emmake make wasm 2>&1 | grep -E "error:|warning:.*error|ctags-wasm|Error" | grep -v "set but not used" | head -20)
+  ⎿             -s WASM=1 -s MODULARIZE=1 -s EXPORT_NAME=CTagsModule -s
+     EXPORTED_FUNCTIONS='["_ctags_init","_ctags_parse_buffer","_ctags_set_output_format","_malloc","_free"]' -s EXPOR
+     TED_RUNTIME_METHODS='["ccall","cwrap","allocateUTF8","UTF8ToString"]' -s ALLOW_MEMORY_GROWTH=1 -o ctags-wasm.js
+  ⎿  (timeout 2m)
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ ctags-wasm.js (137KB) + ctags-wasm.wasm (8MB) が生成されました。動作確認します。
+
+⏺ Bash(cat << 'EOF' > /Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm/test-wasm.mjs
+      import CTagsModule from './ctags-wasm.js';…)
+  ⎿  Error: Exit code 1
+     file:///Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm/test-wasm.mjs:18
+     Module.HEAP8.set(encoded, buf);
+                  ^
+
+     TypeError: Cannot read properties of undefined (reading 'set')
+         at file:///Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm/test-wasm.mjs:18:14
+
+     Node.js v22.18.0
+
+⏺ HEAP8 のアクセス方法を修正します。ccall を使うとより簡単です。
+
+⏺ Bash(cat << 'EOF' > /Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm/test-wasm.mjs
+      import CTagsModule from './ctags-wasm.js';…)
+  ⎿  === ctags output ===
+
+⏺ 出力が空です。デバッグします。
+
+⏺ Bash(cat << 'EOF' > /Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm/test-wasm2.mjs
+      import CTagsModule from './ctags-wasm.js';…)
+  ⎿  stdout: ""
+     stderr: ""
+
+⏺ 生成された JS の stdout バインディングを確認します。
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ 分かりました。Module.print は初期化時（CTagsModule() の呼び出し前）に設定する必要があります。
+
+⏺ Bash(cat << 'EOF' > /Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm/test-wasm.mjs
+      import CTagsModule from './ctags-wasm.js';…)
+  ⎿  === ctags output ===
+
+⏺ タグが1件も生成されていない可能性があります。stderr に診断出力を追加して調べます。
+
+⏺ Searched for 2 patterns, read 1 file (ctrl+o to expand)
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 2 lines
+      122    parseFileWithMio (filename, input, NULL);
+      123    mio_unref (input);
+      124
+      125 +  fprintf (stderr, "[wasm_entry] numTagsAdded=%lu\n", numTagsAdded ());
+      126 +
+      127    closeTagFile (false);
+      128  }
+
+⏺ Bash(emmake make wasm 2>&1 | grep -E "error:|wasm_entry|ctags-wasm" | grep -v "set but not used")
+  ⎿             ../main/wasm_entry.c \
+                -s WASM=1 -s MODULARIZE=1 -s EXPORT_NAME=CTagsModule -s
+     EXPORTED_FUNCTIONS='["_ctags_init","_ctags_parse_buffer","_ctags_set_output_format","_malloc","_free"]' -s EXPOR
+     TED_RUNTIME_METHODS='["ccall","cwrap","allocateUTF8","UTF8ToString"]' -s ALLOW_MEMORY_GROWTH=1 -o ctags-wasm.js
+
+⏺ Bash(cat << 'EOF' > /tmp/test-debug.mjs
+      import CTagsModule from '/Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm/ctags-wasm.js';…)
+  ⎿  stdout: ""
+     stderr: "[wasm_entry] numTagsAdded=0\n"
+
+⏺ タグが0件 — パーサーが動いていません。言語初期化の問題を調べます。
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 2 lines, removed 1 line
+      122    parseFileWithMio (filename, input, NULL);
+      123    mio_unref (input);
+      124
+      125 -  fprintf (stderr, "[wasm_entry] numTagsAdded=%lu\n", numTagsAdded ());
+      125 +  fprintf (stderr, "[wasm_entry] numTagsAdded=%lu, lang=%d\n",
+      126 +    numTagsAdded (), getFileLanguage (filename));
+      127
+      128    closeTagFile (false);
+      129  }
+
+⏺ Searched for 2 patterns (ctrl+o to expand)
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 2 lines, removed 2 lines
+      122    parseFileWithMio (filename, input, NULL);
+      123    mio_unref (input);
+      124
+      125 -  fprintf (stderr, "[wasm_entry] numTagsAdded=%lu, lang=%d\n",
+      126 -    numTagsAdded (), getFileLanguage (filename));
+      125 +  fprintf (stderr, "[wasm_entry] numTagsAdded=%lu, parsers=%u\n",
+      126 +    numTagsAdded (), countParsers ());
+      127
+      128    closeTagFile (false);
+      129  }
+
+⏺ Bash(emmake make wasm 2>&1 | grep "error:" | grep -v "set but not used" && node /tmp/test-debug.mjs)
+  ⎿  Error: Exit code 1
+
+⏺ Bash(emmake make wasm 2>&1 | grep "error:" | grep -v "set but not used")
+  ⎿  No matches found
+
+⏺ Bash(node /tmp/test-debug.mjs)
+  ⎿  stdout: ""
+     stderr: "[wasm_entry] numTagsAdded=0, parsers=158\n"
+
+⏺ パーサーは158個ロードされていますが、タグが0件。言語検出かパーサー実行の問題です。parseFileWithMio の戻り値とより詳細な診断を見てみます。
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 6 lines, removed 4 lines
+      118  {
+      119    openTagFile ();
+      120
+      121 -  MIO *input = mio_new_memory ((unsigned char *)data, size, NULL, NULL);
+      122 -  parseFileWithMio (filename, input, NULL);
+      121 +  unsigned char *copy = eMalloc (size);
+      122 +  memcpy (copy, data, size);
+      123 +  MIO *input = mio_new_memory (copy, size, eRealloc, eFreeNoNullCheck);
+      124 +  bool resized = parseFileWithMio (filename, input, NULL);
+      125    mio_unref (input);
+      126
+      125 -  fprintf (stderr, "[wasm_entry] numTagsAdded=%lu, parsers=%u\n",
+      126 -    numTagsAdded (), countParsers ());
+      127 +  fprintf (stderr, "[wasm_entry] numTagsAdded=%lu, parsers=%u, resized=%d\n",
+      128 +    numTagsAdded (), countParsers (), resized);
+      129
+      130    closeTagFile (false);
+      131  }
+
+⏺ Bash(emmake make wasm 2>&1 | grep "error:" | grep -v "set but not used" && node /tmp/test-debug.mjs)
+  ⎿  Error: Exit code 1
+
+⏺ Bash(emmake make wasm 2>&1 | tail -5)
+  ⎿  emmake: "make wasm" in "/Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm"
+     REPOINFO   main/repoinfo.h
+
+⏺ Bash(node /tmp/test-debug.mjs)
+  ⎿  stdout: ""
+     stderr: "[wasm_entry] numTagsAdded=0, parsers=158, resized=0\n"
+
+⏺ interactiveOneshot() と同じMIO作成方法を試します。
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 6 lines, removed 3 lines
+      118  {
+      119    openTagFile ();
+      120
+      121 -  unsigned char *copy = eMalloc (size);
+      122 -  memcpy (copy, data, size);
+      123 -  MIO *input = mio_new_memory (copy, size, eRealloc, eFreeNoNullCheck);
+      121 +  /* Build the MIO the same way interactiveOneshot() does:
+      122 +   * start with empty memory MIO, write data into it, then seek to start. */
+      123 +  MIO *input = mio_new_memory (NULL, 0, eRealloc, eFreeNoNullCheck);
+      124 +  mio_write (input, data, 1, size);
+      125 +  mio_seek (input, 0, SEEK_SET);
+      126 +
+      127    bool resized = parseFileWithMio (filename, input, NULL);
+      128    mio_unref (input);
+      129
+
+⏺ Bash(emmake make wasm 2>&1 | tail -3 && node /tmp/test-debug.mjs)
+  ⎿  warning: JS library symbol '$allocateUTF8' is deprecated. Please open a bug if you have a continuing need for this symbol [-Wdeprecated]
+     emcc: warning: warnings in JS library compilation [-Wjs-compiler]
+     emcc: warning: running limited binaryen optimizations because DWARF info requested (or indirectly required) [-Wlimited-postlink-optimizations]
+     … +2 lines (ctrl+o to expand)
+
+⏺ initOptions() が初期化に必要か確認します。
+
+⏺ Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ initOptions() が言語マップ (.c → C) を設定します。これが抜けていました。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ initializeParsing() の後に initOptions() と initRegexOptscript() が必要です。
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 2 lines
+      69    initFieldObjects ();
+      70    initXtagObjects ();
+      71    initializeParsing ();
+      72 +  initOptions ();          /* installs default language maps (.c → C etc.) */
+      73 +  initRegexOptscript ();   /* required after initOptions */
+      74
+      75    /*
+      76     * INTERACTIVE_MODE     : makes isDestinationStdout() return true
+
+⏺ Searched for 2 patterns (ctrl+o to expand)
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 1 line
+      48  #include "writer_p.h"
+      49  #include "xtag_p.h"
+      50  #include "interactive_p.h"
+      51 +#include "lregex_p.h"
+      52
+      53  static bool ctags_initialized = false;
+      54
+
+⏺ Bash(emmake make wasm 2>&1 | tail -3 && node /tmp/test-debug.mjs)
+  ⎿  warning: JS library symbol '$allocateUTF8' is deprecated. Please open a bug if you have a continuing need for this symbol [-Wdeprecated]
+     emcc: warning: warnings in JS library compilation [-Wjs-compiler]
+     emcc: warning: running limited binaryen optimizations because DWARF info requested (or indirectly required) [-Wlimited-postlink-optimizations]
+     … +2 lines (ctrl+o to expand)
+
+⏺ タグが出力されました。デバッグ出力を削除してクリーンアップします。
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 1 line, removed 4 lines
+      127    mio_write (input, data, 1, size);
+      128    mio_seek (input, 0, SEEK_SET);
+      129
+      130 -  bool resized = parseFileWithMio (filename, input, NULL);
+      130 +  parseFileWithMio (filename, input, NULL);
+      131    mio_unref (input);
+      132
+      133 -  fprintf (stderr, "[wasm_entry] numTagsAdded=%lu, parsers=%u, resized=%d\n",
+      134 -    numTagsAdded (), countParsers (), resized);
+      135 -
+      133    closeTagFile (false);
+      134  }
+
+⏺ 不要になった include も削除します。
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 1 line, removed 1 line
+      42  #include "mio.h"
+      43  #define OPTION_WRITE   /* allow writing to Option (same pattern as options.c) */
+      44  #include "options_p.h"
+      45 +#include "lregex_p.h"
+      46  #include "parse_p.h"
+      47  #include "routines_p.h"
+      48  #include "trashbox_p.h"
+      49  #include "writer_p.h"
+      50  #include "xtag_p.h"
+      51  #include "interactive_p.h"
+      51 -#include "lregex_p.h"
+      52
+      53  static bool ctags_initialized = false;
+      54
+
+⏺ 最終ビルドして、本格的なテストを実行します。
+
+⏺ Bash(emmake make wasm 2>&1 | tail -3)
+  ⎿  warning: JS library symbol '$allocateUTF8' is deprecated. Please open a bug if you have a continuing need for this symbol [-Wdeprecated]
+     emcc: warning: warnings in JS library compilation [-Wjs-compiler]
+     emcc: warning: running limited binaryen optimizations because DWARF info requested (or indirectly required) [-Wlimited-postlink-optimizations]
+
+⏺ Bash(cat << 'EOF' > /Users/ori/devel/src/github.com/orimanabu/ctags/build-wasm/test-wasm.mjs
+      import CTagsModule from './ctags-wasm.js';…)
+  ⎿  === C (ctags format) ===
+     add        test.c  /^int add(int a, int b) { return a + b; }$/;"   f       typeref:typename:int
+     helper     test.c  /^static void helper(void) {}$/;"       f       typeref:typename:void   file:
+     … +9 lines (ctrl+o to expand)
+
+⏺ C・Python 両方で完璧に動作しています。最終的なソースコードを確認します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ コメントの使用例を ccall ベースに修正します（HEAP8 は使わない）。
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Error editing file
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(~/devel/src/github.com/orimanabu/ctags/main/wasm_entry.c)
+  ⎿  Added 11 lines, removed 11 lines
+       9  *
+      10  *   Usage from JavaScript:
+      11  *
+      12 -*     const Module = await CTagsModule();
+      12 +*     // print callback must be set at module creation time
+      13 +*     let output = '';
+      14 +*     const Module = await CTagsModule({
+      15 +*       print:    (line) => { output += line + '\n'; },
+      16 +*       printErr: (line) => { ... },
+      17 +*     });
+      18  *     Module._ctags_init();
+      19  *
+      15 -*     let output = '';
+      16 -*     Module.print = (line) => { output += line + '\n'; };
+      17 -*
+      18 -*     const filename = Module.allocateUTF8("test.c");
+      20  *     const src = `int foo(void) { return 0; }`;
+      20 -*     const buf = Module._malloc(src.length);
+      21 -*     Module.HEAP8.set(new TextEncoder().encode(src), buf);
+      22 -*     Module._ctags_parse_buffer(filename, buf, src.length);
+      23 -*     Module._free(buf);
+      24 -*     Module._free(filename);
+      25 -*
+      21 +*     const encoded = new TextEncoder().encode(src);
+      22 +*     Module.ccall('ctags_parse_buffer', null,
+      23 +*       ['string', 'array', 'number'],
+      24 +*       ['test.c', encoded, encoded.length]
+      25 +*     );
+      26  *     console.log(output);
+      27  */
+      28
+
+⏺ ---
+  まとめ
+
+  ソースコードの変更点（方針2追加分）
+
+  新規ファイル: main/wasm_entry.c
+
+  エクスポートする C 関数 3つ：
+
+  ┌──────────────────────────────────────────┬────────────────────────────────────────────────┐
+  │                   関数                   │                      説明                      │
+  ├──────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ ctags_init()                             │ ctags サブシステムを初期化。一度だけ呼ぶ       │
+  ├──────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ ctags_parse_buffer(filename, data, size) │ メモリバッファをパースしてタグを stdout に出力 │
+  ├──────────────────────────────────────────┼────────────────────────────────────────────────┤
+  │ ctags_set_output_format(format)          │ 出力フォーマット切り替え ("ctags" / "xref")    │
+  └──────────────────────────────────────────┴────────────────────────────────────────────────┘
+
+  重要なポイント:
+  - #define OPTION_WRITE で Option への書き込みを有効化（options.c と同じパターン）
+  - INTERACTIVE_MODE | INTERACTIVE_WITH_SANDBOX で temp ファイルなしのメモリ MIO 出力
+  - SO_UNSORTED で外部ソート（temp ファイルが必要）を無効化
+  - 初期化順序: initializeParsing() → initOptions() → initRegexOptscript() が必須（これが抜けると言語マップが未設定でタグ0件になる）
+
+  変更ファイル: Makefile.am
+
+  make wasm ターゲットを追加。libctags.a とリンクして ctags-wasm.js + ctags-wasm.wasm を生成。
+
+  ビルド手順
+
+  # 方針1と同じ configure + packcc ビルド後:
+  emmake make wasm
+
+  # 生成物
+  # build-wasm/ctags-wasm.js   (JSラッパー 137KB)
+  # build-wasm/ctags-wasm.wasm (WASMバイナリ 8MB)
+
+  JS からの使い方
+
+  import CTagsModule from './ctags-wasm.js';
+
+  let output = '';
+  const Module = await CTagsModule({
+    print:    (line) => { output += line + '\n'; },  // ← 必ず作成時に設定
+    printErr: () => {},
+  });
+  Module._ctags_init();
+
+  const src = `int foo(int x) { return x; }`;
+  const encoded = new TextEncoder().encode(src);
+  Module.ccall('ctags_parse_buffer', null,
+    ['string', 'array', 'number'],
+    ['test.c', encoded, encoded.length]
+  );
+  console.log(output);
+  // → foo  test.c  /^int foo(int x) { return x; }$/;"  f  typeref:typename:int
+
+✻ Baked for 14m 25s
+
+❯ サンプルのhtmlを作ってください。「テキストボックスがあって、ユーザーはそこにコードスニペットを入力します。Submitボタンを押すと、テキストボックスの下の領域にctagsの出力(タグ情報)が表示される」という動きにしてください
+
+⏺ Write(ctags-demo.html)
+  ⎿  Wrote 508 lines to ctags-demo.html
+       1 <!DOCTYPE html>
+       2 <html lang="ja">
+       3 <head>
+       4   <meta charset="UTF-8">
+       5   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+       6   <title>ctags WASM Demo</title>
+       7   <style>
+       8     * { box-sizing: border-box; margin: 0; padding: 0; }
+       9
+      10     body {
+     … +498 lines (ctrl+o to expand)
+
+⏺ ブラウザで直接開くと CORS の制限があるので、簡単な HTTP サーバーで確認します。
+
+⏺ Bash(python3 -m http.server 8765 &
+      sleep 1 && echo "server started")
+  ⎿  server started
+
+⏺ Bash(python3 -m http.server 8765 &
+      sleep 1…)
+  ⎿  Traceback (most recent call last):
+       File "<frozen runpy>", line 198, in _run_module_as_main
+       File "<frozen runpy>", line 88, in _run_code
+     … +31 lines (ctrl+o to expand)
+
+⏺ サーバーは起動済みで正常にレスポンスしています。
+
+  ---
+  http://localhost:8765/ctags-demo.html をブラウザで開いてください。
+
+  デモページの機能
+
+  操作方法:
+  1. ファイル名欄に test.c, script.py などを入力（言語検出に使用）
+  2. コードスニペットをテキストボックスに入力
+  3. Submit ボタン（または Ctrl+Enter）でパース実行
+
+  表示内容:
+  - タグをテーブル形式で表示（名前・種別・スコープ・型・パターン）
+  - 「生の ctags 出力を見る」で元の ctags フォーマットも確認可能
+
+  サンプルボタン（C / Python / JavaScript / Go）でサンプルコードをワンクリック挿入できます。
+
+✻ Cooked for 1m 16s
+
+❯ ブラウザで開きましたが、「ctags WASM を読み込み中...」のままです。CtagsModuleがロードできてないように見えます。直してください
+
+⏺ 生成された JS のモジュール形式を確認します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ ctags-wasm.js は ES module ではなくグローバル変数 CTagsModule を定義する通常の script です。import は使えません。HTML を修正します。
+
+⏺ Update(ctags-demo.html)
+  ⎿  Added 3 lines, removed 2 lines
+      264    </details>
+      265  </div>
+      266
+      267 -<script type="module">
+      268 -import CTagsModule from './ctags-wasm.js';
+      267 +<script src="./ctags-wasm.js"></script>
+      268 +<script>
+      269 +(async () => {
+      270
+      271  /* ------------------------------------------------------------------ */
+      272  /* サンプルコード                                                        */
+
+⏺ 末尾の </script> も修正します。
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ Update(ctags-demo.html)
+  ⎿  Added 1 line
+      504      document.getElementById('code').value     = s.code;
+      505    });
+      506  });
+      507 +})();
+      508  </script>
+      509  </body>
+      510  </html>
+
+⏺ 念のため構造を確認します。
+
+⏺ Searched for 1 pattern (ctrl+o to expand)
+
+⏺ 動作確認します。
+
+⏺ Bash(node -e "
+      const http = require('http');…)
+  ⎿  http://localhost:8766/ctags-demo.html
+     200
+
+⏺ ページは正常に配信されています。http://localhost:8766/ctags-demo.html を再度ブラウザで開いてみてください。
+
+  修正内容:
+
+  - <script type="module"> + import CTagsModule from ... → 動作しない（ES module 形式ではないため）
+  - <script src="./ctags-wasm.js"></script> で先にロードしてグローバル変数 CTagsModule を確保
+  - その後の <script> 内で (async () => { ... })() ラッパーで await CTagsModule(...) を呼ぶ形に変更
+
+✻ Churned for 44s
+
+❯ localhost:8766でWebサーバを起動したコマンドをもう一度教えて
+
+⏺ Read 1 file (ctrl+o to expand)
+
+⏺ node /tmp/serve.js
+
+  これで http://localhost:8766/ctags-demo.html にアクセスできます。
+
+❯ デモ用のnode serve.jsを止めて
+
+⏺ Bash(pkill -f "node /tmp/serve.js" && echo "stopped")
+  ⎿  Error: Exit code 1
+
+⏺ Bash(lsof -ti:8766 | xargs kill && echo "stopped")
+  ⎿  stopped
+
+⏺ 止めました。
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ? for shortcuts
+```
