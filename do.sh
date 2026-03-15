@@ -37,8 +37,8 @@ step1|1|configure)
 step2|2|packcc)
 	cd ${builddir} && cc -fsigned-char -DPCC_USE_SYSTEM_STRNLEN -o packcc ../misc/packcc/src/packcc.c
 	;;
-step3|3|make)
-	cd ${builddir} && emmake make 2>&1 | tee log.make
+step3|3|node)
+	cd ${builddir} && emmake make 2>&1 | tee log.node
 	;;
 test)
 	cmd="file build-wasm/ctags.wasm"
