@@ -351,6 +351,41 @@ dist-hook:
 		-name 'Makefile.in' -o -name 'Makefile' -o \
 		-name 'BUNDLES' \) -exec rm -f {} +
 
+# Build a WebAssembly module using Emscripten.
+#
+# Prerequisites:
+#   - Emscripten SDK (emcc/emconfigure/emmake)
+#   - Jansson compiled for WASM (see misc/build-wasm.sh for a helper script)
+#
+# Quick start (run from a separate build directory):
+#   mkdir build-wasm && cd build-wasm
+#   JANSSON_CFLAGS="-I/path/to/jansson/src" \
+#   JANSSON_LIBS="/path/to/jansson/src/.libs/libjansson.a" \
+#   emconfigure ../configure --disable-seccomp --disable-xml \
+#       --disable-yaml --disable-pcre2 --disable-iconv
+#   cc -fsigned-char -DPCC_USE_SYSTEM_STRNLEN -o packcc ../misc/packcc/src/packcc.c
+#   emmake make wasm
+#
+WASM_MODULE   = ctags-wasm.js
+WASM_CPPFLAGS = $(libctags_a_CPPFLAGS)
+WASM_LDFLAGS  = \
+	-s WASM=1 \
+	-s MODULARIZE=1 \
+	-s EXPORT_NAME=CTagsModule \
+	-s EXPORTED_FUNCTIONS='["_ctags_init","_ctags_parse_buffer","_ctags_set_output_format","_malloc","_free"]' \
+	-s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","allocateUTF8","UTF8ToString"]' \
+	-s ALLOW_MEMORY_GROWTH=1
+
+$(WASM_MODULE): libctags.a $(GNULIB_LIBS) $(srcdir)/main/wasm_entry.c
+	$(CC) $(CFLAGS) $(WASM_CPPFLAGS) \
+		$(srcdir)/main/wasm_entry.c \
+		libctags.a $(GNULIB_LIBS) \
+		$(JANSSON_LIBS) \
+		$(WASM_LDFLAGS) -o $@
+
+.PHONY: wasm
+wasm: $(WASM_MODULE)
+
 include $(top_srcdir)/makefiles/testing.mak
 
 include $(top_srcdir)/makefiles/help.mak
