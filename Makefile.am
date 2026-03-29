@@ -380,7 +380,7 @@ WASM_LDFLAGS  = \
 	-s ALLOW_MEMORY_GROWTH=1
 
 $(WASM_MODULE): libctags.a $(GNULIB_LIBS) $(srcdir)/main/wasm_entry.c
-	$(CC) $(CFLAGS) $(WASM_CPPFLAGS) \
+	$(CC) $(DEFS) $(CFLAGS) $(WASM_CPPFLAGS) \
 		$(srcdir)/main/wasm_entry.c \
 		libctags.a $(GNULIB_LIBS) \
 		$(JANSSON_LIBS) \

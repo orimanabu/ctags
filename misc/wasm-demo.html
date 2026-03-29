@@ -523,11 +523,14 @@ function renderJsonOutput(rawText) {
     try {
       const obj = JSON.parse(line);
       if (obj._type === 'tag') tags.push(obj);
-      // ptags are intentionally omitted from the table
+      // ptags (_type === 'ptag') are intentionally omitted from the table
     } catch (_) {
       parseErr++;
     }
   }
+
+  // Sort by tag name (C-level sort is disabled in WASM; sort here instead)
+  tags.sort((a, b) => (a.name ?? '').localeCompare(b.name ?? ''));
 
   document.getElementById('tag-count').textContent =
     tags.length === 0 ? '' : `${tags.length} tag${tags.length === 1 ? '' : 's'}`;

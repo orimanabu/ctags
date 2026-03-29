@@ -1,14 +1,22 @@
-// Minimal static file server for the ctags WASM demo.
+// Static file server for the ctags WASM demo.
 //
-// Usage (run from the build directory that contains ctags-wasm.js / ctags-wasm.wasm):
-//   node /path/to/ctags/misc/wasm-demo.js [port]
+// Usage:
+//   node /path/to/ctags/misc/wasm-demo.js [port] [build-dir]
 //
-// Then open: http://localhost:8766/
+//   port      : TCP port to listen on           (default: 8766)
+//   build-dir : directory containing ctags-wasm.js / ctags-wasm.wasm
+//               (default: <ctags-source>/build-wasm)
 //
-// The server must send the correct MIME type for .wasm files
-// (application/wasm) so browsers can compile the module efficiently.
-// The Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy headers
-// are also set to satisfy SharedArrayBuffer requirements if needed in the future.
+// The server searches for requested files in the following directories, in order:
+//   1. build-dir        – WASM module output (ctags-wasm.js, ctags-wasm.wasm)
+//   2. misc/            – demo HTML/JS source  (wasm-demo.html, wasm-demo.js)
+//   3. current dir      – fallback for any extra files
+//
+// Only the basename of each URL path is used, so subdirectory traversal is
+// impossible and every requested resource is resolved against the roots above.
+//
+// The server sets the correct MIME type for .wasm (application/wasm) and adds
+// COOP/COEP headers required by browsers for efficient WASM compilation.
 
 'use strict';
 
@@ -16,8 +24,27 @@ const http = require('http');
 const fs   = require('fs');
 const path = require('path');
 
-const PORT    = parseInt(process.argv[2], 10) || 8766;
-const DOCROOT = process.cwd();
+const PORT = parseInt(process.argv[2], 10) || 8766;
+
+// __dirname is the misc/ directory when this script lives in misc/.
+// After "make wasm" copies this file to the build dir, __dirname is the build dir.
+const SCRIPT_DIR = __dirname;
+const CTAGS_SRC  = path.resolve(path.join(SCRIPT_DIR, '..'));
+
+// Build dir: explicit arg > env var > default (<ctags>/build-wasm)
+const BUILD_DIR = process.argv[3]
+               || process.env.CTAGS_WASM_BUILD_DIR
+               || path.join(CTAGS_SRC, 'build-wasm');
+
+// Demo HTML/JS source dir: prefer misc/ next to wasm-demo.js; also check build dir
+const DEMO_SRC = path.join(CTAGS_SRC, 'misc');
+
+// Search order: build dir first (WASM .js/.wasm), then misc/ (HTML/JS), then cwd
+const ROOTS = [
+  path.resolve(BUILD_DIR),
+  path.resolve(DEMO_SRC),
+  path.resolve(process.cwd()),
+];
 
 const MIME = {
   '.html' : 'text/html; charset=utf-8',
@@ -27,26 +54,18 @@ const MIME = {
   '.map'  : 'application/json',
 };
 
-// Files served from the demo HTML source directory (e.g. misc/wasm-demo.html).
-// The build directory is the primary root; fall back to the source directory
-// so the HTML/JS demo files are found even before "emmake make wasm" copies them.
-const DEMO_SRC = path.join(__dirname);
-
 function serve(req, res) {
   let urlPath = req.url.split('?')[0];
   if (urlPath === '/') urlPath = '/wasm-demo.html';
 
-  // Try build dir first, then source dir
-  const candidates = [
-    path.join(DOCROOT, urlPath),
-    path.join(DEMO_SRC, path.basename(urlPath)),
-  ];
+  // Use only the basename – prevents any path traversal attempt
+  const name = path.basename(urlPath);
+  if (!name) {
+    res.writeHead(400); res.end('bad request\n'); return;
+  }
 
-  for (const filePath of candidates) {
-    if (!filePath.startsWith(DOCROOT) && !filePath.startsWith(DEMO_SRC)) {
-      // Prevent path traversal
-      continue;
-    }
+  for (const root of ROOTS) {
+    const filePath = path.join(root, name);
     if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) continue;
 
     const ext  = path.extname(filePath).toLowerCase();
@@ -68,12 +87,10 @@ function serve(req, res) {
 
 const server = http.createServer(serve);
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`ctags WASM demo server running at:`);
-  console.log(`  http://localhost:${PORT}/`);
+  console.log(`ctags WASM demo  →  http://localhost:${PORT}/`);
   console.log('');
-  console.log('Serving files from:');
-  console.log(`  build dir : ${DOCROOT}`);
-  console.log(`  demo src  : ${DEMO_SRC}`);
+  console.log('Searching for files in:');
+  for (const r of ROOTS) console.log(`  ${r}`);
   console.log('');
   console.log('Press Ctrl+C to stop.');
 });

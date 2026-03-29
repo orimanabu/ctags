@@ -55,8 +55,7 @@ static bool ctags_initialized = false;
 
 /*
  * ctags_init: Initialize ctags subsystems.
- * Configures JSON output (when built with HAVE_JANSSON) and in-memory sorting,
- * matching: ctags --oneshot=<file> --sort -o - --output-format json
+ * Configures JSON output (when built with HAVE_JANSSON).
  * Must be called once before ctags_parse_buffer().
  */
 EMSCRIPTEN_KEEPALIVE
@@ -88,9 +87,14 @@ void ctags_init (void)
 	 */
 	Option.interactive = INTERACTIVE_MODE | INTERACTIVE_WITH_SANDBOX;
 
-	/* SO_SORTED: enable sorting. closeTagFile() is called with
-	 * forceUseInternalSort=true so no external sort(1) command is needed. */
-	Option.sorted = SO_SORTED;
+	/*
+	 * SO_UNSORTED: disable the C-level sort so closeTagFile() uses catFile()
+	 * (putchar-based output) rather than internalSortTagFile() which writes
+	 * via mio_new_fp(stdout) — the latter does not flush correctly in the
+	 * Emscripten WASM environment.  Sorting is performed on the JavaScript
+	 * side after receiving the tag lines.
+	 */
+	Option.sorted = SO_UNSORTED;
 
 	ctags_initialized = true;
 }
@@ -135,6 +139,11 @@ void ctags_set_output_format (const char *format)
 EMSCRIPTEN_KEEPALIVE
 void ctags_parse_buffer (const char *filename, const unsigned char *data, int size)
 {
+	/* Reset the tag counter so it does not accumulate across repeated calls.
+	 * Without this, sortTagFile() might allocate an oversized sort table on
+	 * the second and subsequent invocations. */
+	setNumTagsAdded (0);
+
 	openTagFile ();
 
 	/* Build an in-memory MIO from the source buffer, the same way
@@ -146,7 +155,8 @@ void ctags_parse_buffer (const char *filename, const unsigned char *data, int si
 	parseFileWithMio (filename, input, NULL);
 	mio_unref (input);
 
-	/* forceUseInternalSort=true: sort in memory without invoking sort(1),
-	 * which is unavailable in a WASM/browser environment. */
-	closeTagFile (false, true);
+	/* forceUseInternalSort=false: with SO_UNSORTED this causes closeTagFile()
+	 * to call catFile() which dumps the in-memory MIO to stdout via putchar,
+	 * reliably triggering Module.print in Emscripten. */
+	closeTagFile (false, false);
 }

@@ -82,7 +82,16 @@ if [ ! -f "$CTAGS_SRC/configure" ]; then
     (cd "$CTAGS_SRC" && ./autogen.sh)
 fi
 
-# Configure ctags for WASM
+# autoconf refuses an out-of-tree configure when the source directory has
+# already been configured in-tree (i.e. config.status exists there).
+# Run "make distclean" in the source tree to clear it first.
+if [ -f "$CTAGS_SRC/config.status" ]; then
+    echo "==> Source directory has an in-tree build (config.status found)."
+    echo "    Running 'make distclean' in $CTAGS_SRC to allow out-of-tree WASM build ..."
+    make -C "$CTAGS_SRC" distclean
+fi
+
+# Configure ctags for WASM (out-of-tree, from BUILD_DIR)
 echo "==> Configuring ctags for WASM ..."
 (
     cd "$BUILD_DIR"
