@@ -73,6 +73,9 @@ EXTRA_DIST   = README.md NEWS.rst autogen.sh \
 	       $(PEG_INPUT) $(OPTLIB2C_INPUT) $(OPTLIB2C_PCRE2_INPUT) $(TXT2CSTR_INPUT) \
 	       misc/universal-ctags.svg \
 	       misc/review \
+	       misc/build-wasm.sh \
+	       misc/wasm-demo.html \
+	       misc/wasm-demo.js \
 	       docs Tmain Units m4/gnulib-cache.m4
 
 if HAVE_PEGOF
@@ -385,6 +388,8 @@ $(WASM_MODULE): libctags.a $(GNULIB_LIBS) $(srcdir)/main/wasm_entry.c
 
 .PHONY: wasm
 wasm: $(WASM_MODULE)
+	cp $(srcdir)/misc/wasm-demo.html .
+	cp $(srcdir)/misc/wasm-demo.js .
 
 include $(top_srcdir)/makefiles/testing.mak
 

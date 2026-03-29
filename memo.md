@@ -195,3 +195,171 @@
 
 ✻ Brewed for 7m 8s
 ```
+
+```
+❯ wasmブランチのwasm-demo.{html,js}を参考に、ブラウザで起動するwasmバイナリを使ったデモを作ってください
+
+⏺ Bash(git show wasm:misc/wasm-demo.html && echo "===JS===" && git show wasm:misc/wasm-demo.js)
+  ⎿  <!DOCTYPE html>
+     <html lang="en">
+     <head>
+     … +94 lines (ctrl+o to expand)
+
+⏺ wasm ブランチのデモを参考に、JSON出力に対応した新しいデモを作成します。まず ctags の JSON 出力形式を確認します。
+
+  Searched for 1 pattern, read 1 file (ctrl+o to expand)
+
+⏺ JSON 出力フォーマット（name, path, pattern, kind, scope, line 等）を把握しました。デモを作成します。
+
+⏺ Write(misc/wasm-demo.html)
+  ⎿  Wrote 673 lines to misc/wasm-demo.html
+       1 <!DOCTYPE html>
+       2 <html lang="en">
+       3 <head>
+       4   <meta charset="UTF-8">
+       5   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+       6   <title>ctags WASM Demo</title>
+       7   <style>
+       8     * { box-sizing: border-box; margin: 0; padding: 0; }
+       9
+      10     body {
+     … +663 lines (ctrl+o to expand)
+
+⏺ Write(misc/wasm-demo.js)
+  ⎿  Wrote 79 lines to misc/wasm-demo.js
+       1 // Minimal static file server for the ctags WASM demo.
+       2 //
+       3 // Usage (run from the build directory that contains ctags-wasm.js / ctags-wasm.wasm):
+       4 //   node /path/to/ctags/misc/wasm-demo.js [port]
+       5 //
+       6 // Then open: http://localhost:8766/
+       7 //
+       8 // The server must send the correct MIME type for .wasm files
+       9 // (application/wasm) so browsers can compile the module efficiently.
+      10 // The Cross-Origin-Opener-Policy / Cross-Origin-Embedder-Policy headers
+     … +69 lines (ctrl+o to expand)
+
+⏺ Makefile.am のコピー先も wasm-demo.html と wasm-demo.js を含むよう更新します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Update(Makefile.am)
+  ⎿  Added 2 lines
+      385
+      386  .PHONY: wasm
+      387  wasm: $(WASM_MODULE)
+      388 +  cp $(srcdir)/misc/wasm-demo.html .
+      389 +  cp $(srcdir)/misc/wasm-demo.js .
+      390
+      391  include $(top_srcdir)/makefiles/testing.mak
+      392
+
+⏺ EXTRA_DIST にデモファイルを追加します。
+
+⏺ Update(Makefile.am)
+  ⎿  Error editing file
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Update(Makefile.am)
+  ⎿  Added 3 lines
+      73           $(PEG_INPUT) $(OPTLIB2C_INPUT) $(OPTLIB2C_PCRE2_INPUT) $(TXT2CSTR_INPUT) \
+      74           misc/universal-ctags.svg \
+      75           misc/review \
+      76 +         misc/build-wasm.sh \
+      77 +         misc/wasm-demo.html \
+      78 +         misc/wasm-demo.js \
+      79           docs Tmain Units m4/gnulib-cache.m4
+      80
+      81  if HAVE_PEGOF
+
+⏺ 作成したファイルを確認します。
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Bash(git diff --stat HEAD)
+  ⎿   Makefile.am | 5 +++++
+      1 file changed, 5 insertions(+)
+
+⏺ Bash(git status)
+  ⎿  On branch new-wasm
+     Changes not staged for commit:
+       (use "git add <file>..." to update what will be committed)
+     … +11 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+⏺ Bash(git status --short main/wasm_entry.c misc/build-wasm.sh)
+  ⎿  (No output)
+
+  Searched for 1 pattern (ctrl+o to expand)
+
+⏺ Bash(git check-ignore -v main/wasm_entry.c misc/build-wasm.sh)
+  ⎿  Error: Exit code 1
+
+⏺ Bash(git ls-files main/wasm_entry.c misc/build-wasm.sh)
+  ⎿  main/wasm_entry.c
+     misc/build-wasm.sh
+
+⏺ これらのファイルはすでにトラックされています（前回のセッションで作成済み）。git diff で確認します。
+
+⏺ Bash(git log --oneline -3 && echo "---" && git show --stat HEAD)
+  ⎿  aa49581b2 Make wasm binary of `ctags --oneshot --sort -o - --output-format json`
+     214b6af21 main: add --oneshot=<filename> option
+     1a16310fd main: make the set of system calls allowed in the sandbox tunable
+     … +12 lines (ctrl+o to expand)
+
+⏺ 前回のセッションで main/wasm_entry.c と misc/build-wasm.sh はすでにコミット済みでした。今回追加したのは以下の差分です。
+
+⏺ Bash(git diff HEAD Makefile.am)
+  ⎿  diff --git a/Makefile.am b/Makefile.am
+     index 0d2bc2bbf..44390efe1 100644
+     --- a/Makefile.am
+     … +19 lines (ctrl+o to expand)
+
+⏺ 以上です。作成・変更したものをまとめます。
+
+  ---
+  追加・変更したファイル
+
+  misc/wasm-demo.html (新規)
+
+  wasm ブランチのデモを元に、JSON 出力対応で全面改修:
+
+  ┌───────────────────┬────────────────────────────────────────────────────────────┐
+  │       機能        │                            内容                            │
+  ├───────────────────┼────────────────────────────────────────────────────────────┤
+  │ 出力形式セレクタ  │ json / u-ctags / xref / etags を切り替え                   │
+  ├───────────────────┼────────────────────────────────────────────────────────────┤
+  │ JSON テーブル表示 │ name, kind, line, scope, typeref, pattern を列に分けて表示 │
+  ├───────────────────┼────────────────────────────────────────────────────────────┤
+  │ ptag 除外         │ {"_type":"ptag",...} はテーブルから除外                    │
+  ├───────────────────┼────────────────────────────────────────────────────────────┤
+  │ raw 出力          │ JSON シンタックスハイライト付きで折りたたみ表示            │
+  ├───────────────────┼────────────────────────────────────────────────────────────┤
+  │ サンプル          │ C / Python / JavaScript / Go / Rust の 5 種                │
+  ├───────────────────┼────────────────────────────────────────────────────────────┤
+  │ キーバインド      │ Ctrl+Enter で実行                                          │
+  └───────────────────┴────────────────────────────────────────────────────────────┘
+
+  misc/wasm-demo.js (新規)
+
+  Node.js 静的ファイルサーバー。application/wasm の MIME タイプと COOP/COEP ヘッダを正しく設定し、ビルドディレクトリと misc/ の両方からファイルを配信。
+
+  Makefile.am (更新)
+
+  make wasm 実行後に wasm-demo.html/wasm-demo.js をビルドディレクトリにコピーするよう追加。
+
+  ---
+  動作確認手順
+
+  # 1. WASM ビルド（初回）
+  ./misc/build-wasm.sh          # → build-wasm/ctags-wasm.{js,wasm}
+
+  # 2. デモサーバー起動
+  node misc/wasm-demo.js        # build-wasm/ ディレクトリから実行
+
+  # → http://localhost:8766/ をブラウザで開く
+
+✻ Baked for 3m 10s
+```
